@@ -2,9 +2,7 @@
 # encoding: utf-8
 
 import sys
-import time
-from subprocess import call
-import io
+import datetime
 
 lines = []
 
@@ -13,9 +11,10 @@ for filename in sys.argv[1:]:
 	for l in f:
 		logline = l.replace(",", " ").split()
 		logline = [filename] + logline
-		logline[2] = time.strptime(" ".join([logline[1], logline[2].partition(".")[0]]), "%Y-%m-%d %H:%M:%S")
+		logline[2] = datetime.strptime(" ".join([logline[1], logline[2].partition(".")[0]]), "%Y-%m-%d %H:%M:%S")
 		lines.append(logline)
 
+#lines now has same format like log file except timestamp
 lines = sorted(lines, lambda x, y: cmp(x[2], y[2]))
 
 lines = [val for val in lines if len(val) > 8 and val[1] == "2011-05-24" and val[8] == "00:1f:1f:09:08:7b"]
@@ -142,17 +141,20 @@ places = [
 ("t9-k61", "1338", "381"),
 ("t9-k63", "1338", "200")]
 
-#bla = io.open("/proc/self/fd/1", "wb", 0)
+first, _ = sorted(timehash.iteritems())[0]
+last, _ = sorted(timehash.iteritems())[-1]
+
+timeline = []
 
 for count, frame in enumerate(sorted(timehash.iteritems())):
 	k, v = frame
 	#print count
 	filename = "build/%05d.svg" % count
-	out = open(filename, "w")
+	#out = open(filename, "w")
 	#out = open("temp.svg", "w")
-	#out = sys.stdout
+	out = sys.stdout
 	out.write("""\
-<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.0\" width=\"1600\" height=\"900\">
+<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.0\" width=\"800\" height=\"450\">
 	<defs>
 		<style type="text/css"><![CDATA[
 			circle {
@@ -176,7 +178,9 @@ for count, frame in enumerate(sorted(timehash.iteritems())):
 	out.write("""\
 		]]></style>
 	</defs>
-	<rect x="0" y="0" width="1600" height="900" stroke="none" fill="white"/>""")
+	<rect x="0" y="0" width="800" height="450" stroke="none" fill="white"/>
+	<g transform="scale(0.5)">
+	""")
 	for p in places:
 		cat = p[0]
 		if p[0].startswith("t9-k"):
@@ -186,9 +190,8 @@ for count, frame in enumerate(sorted(timehash.iteritems())):
 		if p[0].startswith("t9-1"):
 			cat += " t9-1"
 		out.write("\t<circle class=\"" + cat + "\" cx=\"" + p[1] + "\" cy=\"" + p[2] + "\" r=\"17\"/>\n")
+	out.write("<text x=\"10\" y=\"10\">" + str(count) + "</text>\n")
+	out.write("""</g>""")
 	out.write("""</svg>""")
-	out.close()
-	#call(["convert", "temp.svg", "temp.ppm"])
-	#inp = io.open("temp.ppm", "rb", 0)
-	#sys.stdout.write(inp.readall())
+	#out.close()
 
