@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 import sys
-import datetime
+import time
 
 lines = []
 
@@ -11,7 +11,7 @@ for filename in sys.argv[1:]:
 	for l in f:
 		logline = l.replace(",", " ").split()
 		logline = [filename] + logline
-		logline[2] = datetime.strptime(" ".join([logline[1], logline[2].partition(".")[0]]), "%Y-%m-%d %H:%M:%S")
+		logline[2] = time.strptime(" ".join([logline[1], logline[2].partition(".")[0]]), "%Y-%m-%d %H:%M:%S")
 		lines.append(logline)
 
 #lines now has same format like log file except timestamp
