@@ -3,34 +3,57 @@
 
 import sys
 import time
+import os.path
 
-lines = []
+#a linear list of all samples of all nodes
+loglines = []
 
-for filename in sys.argv[1:]:
-	f = open(filename, "r")
-	for l in f:
-		logline = l.replace(",", " ").split()
-		logline = [filename] + logline
+for logfilepath in sys.argv[1:]:
+	logfile = open(logfilepath, "r")
+	
+	#assumption: the name of the innermost directory in logfilepath is node name
+	dirpath, filename = os.path.split(logfilepath)
+	_, nodename = os.path.split(dirpath)
+	for line in logfile:
+		#break the line in tokens on comma and whitespace
+		logline = line.replace(",", " ").replace(" | ", " ").split()
+		#prepend the node name to the log line
+		logline = [nodename] + logline
+		#convert the time string to seconds since epoch
 		logline[2] = time.strptime(" ".join([logline[1], logline[2].partition(".")[0]]), "%Y-%m-%d %H:%M:%S")
-		lines.append(logline)
+		logline[2] = time.mktime(logline[2])
+		logline[2] = int(logline[2])
+		loglines.append(logline)
 
 #lines now has same format like log file except timestamp
-lines = sorted(lines, lambda x, y: cmp(x[2], y[2]))
+#lines = sorted(lines, lambda x, y: cmp(x[2], y[2]))
 
-lines = [val for val in lines if len(val) > 8 and val[1] == "2011-05-24" and val[8] == "00:1f:1f:09:08:7b"]
-lines = [(val[0].lstrip("logs/").rstrip("/des-hello.log"), val[2], val[-5], val[-2]) for val in lines]
+#filter out any non-sample log lines
+#FIXME: sample log lines should contain magic for easier recognition
+loglines = filter(lambda line: len(line) > 4 and "log_neighbour@dessert_monitor" in line[4], loglines)
 
-#lines now has format (location, time, rssi, packet_count)
-lines = [x for x in lines if int(x[3]) > 30]
+samples = []
 
-timehash = {}
+class Sample:
+	pass
 
-for line in lines:
-	snapshot = (line[0], line[2], line[3])
-	if line[1] in timehash:
-		timehash[line[1]].append(snapshot)
-	else:
-		timehash[line[1]] = [snapshot]
+#SELECT nodeName, timestamp, rssi, packetCount FROM loglines
+for line in loglines:
+	sample = Sample()
+	sample.node = line[0]
+	sample.time = line[2]
+	sample.rssi = int(line[-5])
+	sample.count = int(line[-2])
+	samples.append(sample)
+
+
+#TODO: filter samples to just the ones needed, e.g. certain day, minimal rssi etc.
+#samples = filter(lambda sample: sample.count > 5, samples)
+samples = filter(lambda sample: sample.time >= 1306235203, samples)
+
+times = [sample.time for sample in samples]
+earliest = min(times)
+latest   = max(times)
 
 places = [
 #("a3-005", "4000", ""),
@@ -141,22 +164,53 @@ places = [
 ("t9-k61", "1338", "381"),
 ("t9-k63", "1338", "200")]
 
-first, _ = sorted(timehash.iteritems())[0]
-last, _ = sorted(timehash.iteritems())[-1]
+walk = [["00:00:00", 733, 350],
+        ["13:09:00", 733, 350],
+        ["13:09:40", 724, 714],
+        ["13:10:10", 724, 714],
+        ["13:10:34", 724, 714],
+        ["13:10:46", 909, 700],
+        ["13:11:04", 1420, 670],
+        ["13:11:24", 1410, 531],
+        ["13:12:00", 1411, 306],
+        ["13:12:15", 1467, 219],
+        ["13:12:32", 1422, 156],
+        ["13:12:51", 1426, 586],
+        ["13:13:09", 973, 585],
+        ["13:13:25", 444, 517],
+        ["13:13:42", 447, 583],
+        ["13:14:07", 217, 477],
+        ["13:14:22", 216, 115],
+        ["13:14:43", 217, 112],
+        ["13:15:07", 518, 76],
+        ["13:15:43", 1482, 60],
+        ["13:16:00", 1630, 15],
+        ["13:19:17", 1630, 15],
+        ["13:19:41", 17, 738],
+        ["13:20:00", 724, 697],
+        ["13:20:17", 474, 720],
+        ["13:20:31", 210, 606],
+        ["13:20:47", 210, 234],
+        ["13:21:14", 210, 822],
+        ["13:21:35", 550, 718],
+        ["13:21:55", 810, 550],
+        ["13:22:15", 1150, 720],
+        ["13:22:30", 1410, 610],
+        ["13:22:40", 1410, 530],
+        ["13:23:30", 1500, 530],
+        ["23:59:59", 1500, 530]];
 
-timeline = []
+for w in walk:
+	w[0] = time.mktime(time.strptime("2011-05-24 %s" % w[0], "%Y-%m-%d %H:%M:%S")) - 55
 
-for count, frame in enumerate(sorted(timehash.iteritems())):
-	k, v = frame
-	#print count
-	filename = "build/%05d.svg" % count
-	#out = open(filename, "w")
-	#out = open("temp.svg", "w")
-	out = sys.stdout
-	out.write("""\
-<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.0\" width=\"800\" height=\"450\">
+svgHeader = \
+"""<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.0\" width=\"800\" height=\"450\">
 	<defs>
-		<style type="text/css"><![CDATA[
+		<style type="text/css">
+			<![CDATA[
+"""
+
+staticCSS = """\
 			circle {
 				fill: blue;
 				stroke: grey;
@@ -172,15 +226,31 @@ for count, frame in enumerate(sorted(timehash.iteritems())):
 			}
 			cirlce.t9-1 {
 				fill: blue;
-			}\n""")
-	for node in v:
-		out.write("\t\t\tcircle." + node[0] + " {\n\t\t\t\tfill-opacity: " + str((float(node[1])+90) / 50) + ";\n\t\t\t}\n")
+			}
+"""
+
+for time in range(earliest, latest+1):
+	filename = "build/%012d.svg" % time
+	out = open(filename, "w")
+	out.write(svgHeader)
+	out.write(staticCSS)
+	
+	prev_time, walk_prev_x, walk_prev_y = max(filter(lambda w: w[0] <= time, walk))
+	next_time, walk_next_x, walk_next_y = min(filter(lambda w: w[0] > time, walk))
+	snapshot = filter(lambda sample: time == sample.time, samples)
+	
+	for sample in snapshot:
+		out.write("\t\t\tcircle." + sample.node + " {\n\t\t\t\tfill-opacity: " + str((sample.rssi+90.0) / 50.0) + ";\n\t\t\t}\n")
 	out.write("""\
-		]]></style>
+			]]>
+		</style>
 	</defs>
-	<rect x="0" y="0" width="800" height="450" stroke="none" fill="white"/>
+	
 	<g transform="scale(0.5)">
-	""")
+		<rect x="0" y="0" width="1600" height="900" stroke="none" fill="white"/>
+		<g transform="translate(0, 85)">
+		<path style="fill: none; stroke: grey; stroke-width: 2px" d="M72 780, 72 78, 370 78, 370 550, 670 550, 670 108, 970 108, 970 550, 1270 550, 1270 108, 1570, 108, 1570 780 z"/></g>
+""")
 	for p in places:
 		cat = p[0]
 		if p[0].startswith("t9-k"):
@@ -189,9 +259,26 @@ for count, frame in enumerate(sorted(timehash.iteritems())):
 			cat += " t9-0"
 		if p[0].startswith("t9-1"):
 			cat += " t9-1"
-		out.write("\t<circle class=\"" + cat + "\" cx=\"" + p[1] + "\" cy=\"" + p[2] + "\" r=\"17\"/>\n")
-	out.write("<text x=\"10\" y=\"10\">" + str(count) + "</text>\n")
-	out.write("""</g>""")
-	out.write("""</svg>""")
-	#out.close()
+		if "-ext-" in p[0]:
+			cat += " ext"
+		#print [s.node for s in snapshot]
+		sample = filter(lambda sample: sample.node == p[0], snapshot)
+		#print p, sample
+		radius = 2
+		
+		if(len(sample)):
+			radius = sample[0].count
+		out.write("\t\t<circle class=\"" + cat + "\" cx=\"" + p[1] + "\" cy=\"" + p[2] + "\" r=\"" + str(radius) + "\"/>\n")
+	
+	interval = next_time - prev_time
+	progress = (time - prev_time) / interval
+	walk_x = (1 - progress) * walk_prev_x + progress * walk_next_x
+	walk_y = (1 - progress) * walk_prev_y + progress * walk_next_y
+	out.write("<g transform=\"translate(" + str(walk_x) + ", " + str(walk_y) + ")\">\n")
+	out.write("""<path style="fill: purple; fill-opacity: 0.5; stroke: none" d="M-25 0 L 0 25 L 25 0 L 0 -25 z"/>""")
+	out.write("</g>")
+	out.write("\t\t<text style=\"font-size:20px\" x=\"10\" y=\"10\">" + str(time) + "</text>\n")
+	out.write("\t</g>\n")
+	out.write("</svg>\n")
+	out.close()
 

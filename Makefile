@@ -1,8 +1,13 @@
 all: anim.mp4
 
 clean:
-	rm -f anim.mp4
+	rm -f build/*.{svg} anim.mp4
 
-anim.mp4: logs/*/des-hello.log
-	echo $|
-	./foobar.py $^ | gst-launch fdsrc fd=0 ! "image/svg,framerate=15/1" ! rsvgdec ! videoparse width=800 height=450 format="bgra" framerate=15 ! ffmpegcolorspace ! x264enc bitrate=1000 ! mp4mux ! filesink location=$@
+foobar.stamp: foobar.py
+	./foobar.py logs/*/des-hello.log
+	touch foobar.stamp
+
+anim.mp4: foobar.stamp
+	gst-launch multifilesrc location="build/%012d.svg" index=1306235203 ! "image/svg+xml,width=800,height=450,framerate=10.0" ! rsvgdec ! videoparse width=800 height=450 framerate=10 format=rgba ! ffmpegcolorspace ! x264enc ! mp4mux ! filesink location=$@
+
+.PHONY: clean
